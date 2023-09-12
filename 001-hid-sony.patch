@@ -1,0 +1,285 @@
+diff --git a/drivers/hid/hid-sony.c b/drivers/hid/hid-sony.c
+index c0bd44e7e741..353629aab49a 100644
+--- a/drivers/hid/hid-sony.c
++++ b/drivers/hid/hid-sony.c
+@@ -1307,160 +1307,6 @@ static void sony_unregister_touchpad(struct sony_sc *sc)
+ 	sc->touchpad = NULL;
+ }
+ 
+-static int sony_register_sensors(struct sony_sc *sc)
+-{
+-	size_t name_sz;
+-	char *name;
+-	int ret;
+-	int range;
+-
+-	sc->sensor_dev = input_allocate_device();
+-	if (!sc->sensor_dev)
+-		return -ENOMEM;
+-
+-	input_set_drvdata(sc->sensor_dev, sc);
+-	sc->sensor_dev->dev.parent = &sc->hdev->dev;
+-	sc->sensor_dev->phys = sc->hdev->phys;
+-	sc->sensor_dev->uniq = sc->hdev->uniq;
+-	sc->sensor_dev->id.bustype = sc->hdev->bus;
+-	sc->sensor_dev->id.vendor = sc->hdev->vendor;
+-	sc->sensor_dev->id.product = sc->hdev->product;
+-	sc->sensor_dev->id.version = sc->hdev->version;
+-
+-	/* Append a suffix to the controller name as there are various
+-	 * DS4 compatible non-Sony devices with different names.
+-	 */
+-	name_sz = strlen(sc->hdev->name) + sizeof(SENSOR_SUFFIX);
+-	name = kzalloc(name_sz, GFP_KERNEL);
+-	if (!name) {
+-		ret = -ENOMEM;
+-		goto err;
+-	}
+-	snprintf(name, name_sz, "%s" SENSOR_SUFFIX, sc->hdev->name);
+-	sc->sensor_dev->name = name;
+-
+-	if (sc->quirks & SIXAXIS_CONTROLLER) {
+-		/* For the DS3 we only support the accelerometer, which works
+-		 * quite well even without calibration. The device also has
+-		 * a 1-axis gyro, but it is very difficult to manage from within
+-		 * the driver even to get data, the sensor is inaccurate and
+-		 * the behavior is very different between hardware revisions.
+-		 */
+-		input_set_abs_params(sc->sensor_dev, ABS_X, -512, 511, 4, 0);
+-		input_set_abs_params(sc->sensor_dev, ABS_Y, -512, 511, 4, 0);
+-		input_set_abs_params(sc->sensor_dev, ABS_Z, -512, 511, 4, 0);
+-		input_abs_set_res(sc->sensor_dev, ABS_X, SIXAXIS_ACC_RES_PER_G);
+-		input_abs_set_res(sc->sensor_dev, ABS_Y, SIXAXIS_ACC_RES_PER_G);
+-		input_abs_set_res(sc->sensor_dev, ABS_Z, SIXAXIS_ACC_RES_PER_G);
+-	} else if (sc->quirks & DUALSHOCK4_CONTROLLER) {
+-		range = DS4_ACC_RES_PER_G*4;
+-		input_set_abs_params(sc->sensor_dev, ABS_X, -range, range, 16, 0);
+-		input_set_abs_params(sc->sensor_dev, ABS_Y, -range, range, 16, 0);
+-		input_set_abs_params(sc->sensor_dev, ABS_Z, -range, range, 16, 0);
+-		input_abs_set_res(sc->sensor_dev, ABS_X, DS4_ACC_RES_PER_G);
+-		input_abs_set_res(sc->sensor_dev, ABS_Y, DS4_ACC_RES_PER_G);
+-		input_abs_set_res(sc->sensor_dev, ABS_Z, DS4_ACC_RES_PER_G);
+-
+-		range = DS4_GYRO_RES_PER_DEG_S*2048;
+-		input_set_abs_params(sc->sensor_dev, ABS_RX, -range, range, 16, 0);
+-		input_set_abs_params(sc->sensor_dev, ABS_RY, -range, range, 16, 0);
+-		input_set_abs_params(sc->sensor_dev, ABS_RZ, -range, range, 16, 0);
+-		input_abs_set_res(sc->sensor_dev, ABS_RX, DS4_GYRO_RES_PER_DEG_S);
+-		input_abs_set_res(sc->sensor_dev, ABS_RY, DS4_GYRO_RES_PER_DEG_S);
+-		input_abs_set_res(sc->sensor_dev, ABS_RZ, DS4_GYRO_RES_PER_DEG_S);
+-
+-		__set_bit(EV_MSC, sc->sensor_dev->evbit);
+-		__set_bit(MSC_TIMESTAMP, sc->sensor_dev->mscbit);
+-	}
+-
+-	__set_bit(INPUT_PROP_ACCELEROMETER, sc->sensor_dev->propbit);
+-
+-	if (sc->quirks & NAVIGATION_CONTROLLER)
+-		return navigation_mapping(hdev, hi, field, usage, bit, max);
+-
+-	if (sc->quirks & SIXAXIS_CONTROLLER)
+-		return sixaxis_mapping(hdev, hi, field, usage, bit, max);
+-
+-	if (sc->quirks & DUALSHOCK4_CONTROLLER)
+-		return ds4_mapping(hdev, hi, field, usage, bit, max);
+-
+-
+-	/* Let hid-core decide for the others */
+-	return 0;
+-}
+-
+-static int sony_register_touchpad(struct sony_sc *sc, int touch_count,
+-					int w, int h)
+-{
+-	size_t name_sz;
+-	char *name;
+-	int ret;
+-
+-	sc->touchpad = input_allocate_device();
+-	if (!sc->touchpad)
+-		return -ENOMEM;
+-
+-	input_set_drvdata(sc->touchpad, sc);
+-	sc->touchpad->dev.parent = &sc->hdev->dev;
+-	sc->touchpad->phys = sc->hdev->phys;
+-	sc->touchpad->uniq = sc->hdev->uniq;
+-	sc->touchpad->id.bustype = sc->hdev->bus;
+-	sc->touchpad->id.vendor = sc->hdev->vendor;
+-	sc->touchpad->id.product = sc->hdev->product;
+-	sc->touchpad->id.version = sc->hdev->version;
+-
+-	/* Append a suffix to the controller name as there are various
+-	 * DS4 compatible non-Sony devices with different names.
+-	 */
+-	name_sz = strlen(sc->hdev->name) + sizeof(DS4_TOUCHPAD_SUFFIX);
+-	name = kzalloc(name_sz, GFP_KERNEL);
+-	if (!name) {
+-		ret = -ENOMEM;
+-		goto err;
+-	}
+-	snprintf(name, name_sz, "%s" DS4_TOUCHPAD_SUFFIX, sc->hdev->name);
+-	sc->touchpad->name = name;
+-
+-	ret = input_mt_init_slots(sc->touchpad, touch_count, INPUT_MT_POINTER);
+-	if (ret < 0)
+-		goto err;
+-
+-	/* We map the button underneath the touchpad to BTN_LEFT. */
+-	__set_bit(EV_KEY, sc->touchpad->evbit);
+-	__set_bit(BTN_LEFT, sc->touchpad->keybit);
+-	__set_bit(INPUT_PROP_BUTTONPAD, sc->touchpad->propbit);
+-
+-	input_set_abs_params(sc->touchpad, ABS_MT_POSITION_X, 0, w, 0, 0);
+-	input_set_abs_params(sc->touchpad, ABS_MT_POSITION_Y, 0, h, 0, 0);
+-
+-	ret = input_register_device(sc->touchpad);
+-	if (ret < 0)
+-		goto err;
+-
+-	return 0;
+-
+-err:
+-	kfree(sc->touchpad->name);
+-	sc->touchpad->name = NULL;
+-
+-	input_free_device(sc->touchpad);
+-	sc->touchpad = NULL;
+-
+-	return ret;
+-}
+-
+-static void sony_unregister_touchpad(struct sony_sc *sc)
+-{
+-	if (!sc->touchpad)
+-		return;
+-
+-	kfree(sc->touchpad->name);
+-	sc->touchpad->name = NULL;
+-
+-	input_unregister_device(sc->touchpad);
+-	sc->touchpad = NULL;
+-}
+-
+ static int sony_register_sensors(struct sony_sc *sc)
+ {
+ 	size_t name_sz;
+@@ -1766,51 +1612,6 @@ err_stop:
+ 	return ret;
+ }
+ 
+-static void dualshock4_calibration_work(struct work_struct *work)
+-{
+-	struct sony_sc *sc = container_of(work, struct sony_sc, hotplug_worker);
+-	unsigned long flags;
+-	enum ds4_dongle_state dongle_state;
+-	int ret;
+-	short gyro_pitch_bias, gyro_pitch_plus, gyro_pitch_minus;
+-	short gyro_yaw_bias, gyro_yaw_plus, gyro_yaw_minus;
+-	short gyro_roll_bias, gyro_roll_plus, gyro_roll_minus;
+-	short gyro_speed_plus, gyro_speed_minus;
+-	short acc_x_plus, acc_x_minus;
+-	short acc_y_plus, acc_y_minus;
+-	short acc_z_plus, acc_z_minus;
+-	int speed_2x;
+-	int range_2g;
+-
+-	/* For Bluetooth we use a different request, which supports CRC.
+-	 * Note: in Bluetooth mode feature report 0x02 also changes the state
+-	 * of the controller, so that it sends input reports of type 0x11.
+-	 */
+-	if (sc->quirks & (DUALSHOCK4_CONTROLLER_USB | DUALSHOCK4_DONGLE)) {
+-		buf = kmalloc(DS4_FEATURE_REPORT_0x02_SIZE, GFP_KERNEL);
+-		if (!buf)
+-			return -ENOMEM;
+-
+-	ret = dualshock4_get_calibration_data(sc);
+-	if (ret < 0) {
+-		/* This call is very unlikely to fail for the dongle. When it
+-		 * fails we are probably in a very bad state, so mark the
+-		 * dongle as disabled. We will re-enable the dongle if a new
+-		 * DS4 hotplug is detect from sony_raw_event as any issues
+-		 * are likely resolved then (the dongle is quite stupid).
+-		 */
+-		hid_err(sc->hdev, "DualShock 4 USB dongle: calibration failed, disabling device\n");
+-		dongle_state = DONGLE_DISABLED;
+-	} else {
+-		hid_info(sc->hdev, "DualShock 4 USB dongle: calibration completed\n");
+-		dongle_state = DONGLE_CONNECTED;
+-	}
+-
+-	spin_lock_irqsave(&sc->lock, flags);
+-	sc->ds4_dongle_state = dongle_state;
+-	spin_unlock_irqrestore(&sc->lock, flags);
+-}
+-
+ static void dualshock4_calibration_work(struct work_struct *work)
+ {
+ 	struct sony_sc *sc = container_of(work, struct sony_sc, hotplug_worker);
+@@ -2975,67 +2776,6 @@ static int sony_probe(struct hid_device *hdev, const struct hid_device_id *id)
+ 	return ret;
+ }
+ 
+-static int sony_probe(struct hid_device *hdev, const struct hid_device_id *id)
+-{
+-	int ret;
+-	unsigned long quirks = id->driver_data;
+-	struct sony_sc *sc;
+-	unsigned int connect_mask = HID_CONNECT_DEFAULT;
+-
+-	sc = devm_kzalloc(&hdev->dev, sizeof(*sc), GFP_KERNEL);
+-	if (sc == NULL) {
+-		hid_err(hdev, "can't alloc sony descriptor\n");
+-		return -ENOMEM;
+-	}
+-
+-	spin_lock_init(&sc->lock);
+-
+-	sc->quirks = quirks;
+-	hid_set_drvdata(hdev, sc);
+-	sc->hdev = hdev;
+-
+-	ret = hid_parse(hdev);
+-	if (ret) {
+-		hid_err(hdev, "parse failed\n");
+-		return ret;
+-	}
+-
+-	if (sc->quirks & VAIO_RDESC_CONSTANT)
+-		connect_mask |= HID_CONNECT_HIDDEV_FORCE;
+-	else if (sc->quirks & SIXAXIS_CONTROLLER)
+-		connect_mask |= HID_CONNECT_HIDDEV_FORCE;
+-
+-	/* Patch the hw version on DS3/4 compatible devices, so applications can
+-	 * distinguish between the default HID mappings and the mappings defined
+-	 * by the Linux game controller spec. This is important for the SDL2
+-	 * library, which has a game controller database, which uses device ids
+-	 * in combination with version as a key.
+-	 */
+-	if (sc->quirks & (SIXAXIS_CONTROLLER | DUALSHOCK4_CONTROLLER))
+-		hdev->version |= 0x8000;
+-
+-	ret = hid_hw_start(hdev, connect_mask);
+-	if (ret) {
+-		hid_err(hdev, "hw start failed\n");
+-		return ret;
+-	}
+-
+-	/* sony_input_configured can fail, but this doesn't result
+-	 * in hid_hw_start failures (intended). Check whether
+-	 * the HID layer claimed the device else fail.
+-	 * We don't know the actual reason for the failure, most
+-	 * likely it is due to EEXIST in case of double connection
+-	 * of USB and Bluetooth, but could have been due to ENOMEM
+-	 * or other reasons as well.
+-	 */
+-	if (!(hdev->claimed & HID_CLAIMED_INPUT)) {
+-		hid_err(hdev, "failed to claim input\n");
+-		return -ENODEV;
+-	}
+-
+-	return ret;
+-}
+-
+ static void sony_remove(struct hid_device *hdev)
+ {
+ 	struct sony_sc *sc = hid_get_drvdata(hdev);
